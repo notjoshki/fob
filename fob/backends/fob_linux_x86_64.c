@@ -1062,6 +1062,8 @@ static char *emit_arithmetic(const FOB_Op *op, FOB_Backend *backend) {
             break;
         case FOB_OP_BOOL_NOT: {
             if (is_float) {
+                code = calloc(1, sizeof(char));
+                assert(false);
             } else {
                 // NEED 8 bit register.
                 FOB_Operand dst_8bit = fob_create_fob_operand_register(fob_create_data_type(FOB_PRIM_BOOL), dst->value.register_.number);
