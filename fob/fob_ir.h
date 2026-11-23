@@ -105,6 +105,7 @@ typedef struct {
 typedef struct {
     FOB_Primitive_Type primitive_type;
     size_t number;
+    bool is_hardware; // Exclusively for backend use.
 } FOB_Operand_Register;
 
 typedef struct {
@@ -197,7 +198,7 @@ static inline FOB_Operand fob_create_fob_operand_string(char *text) {
 
 static inline FOB_Operand fob_create_fob_operand_register(FOB_Data_Type data_type, size_t number) {
     return (FOB_Operand){ .type = FOB_OPER_REGISTER, .data_type = data_type,
-        .value.register_ = (FOB_Operand_Register){ .primitive_type = fob_data_type_to_primitive_type(&data_type), .number = number }};
+        .value.register_ = (FOB_Operand_Register){ .primitive_type = fob_data_type_to_primitive_type(&data_type), .number = number, .is_hardware = false }};
 }
 
 static inline FOB_Operand fob_create_fob_identifier(char *name) {

@@ -5,6 +5,9 @@
 #ifndef FOB_BACKEND_H
 #define FOB_BACKEND_H
 
+#include "fob_ir.h"
+#include "fob_data_type.h"
+
 char *fob_emit_ir(const FOB_IR *ir, const char *entrypoint_name);
 size_t data_type_to_hardware_byte_size(const FOB_Data_Type *data_type);
 

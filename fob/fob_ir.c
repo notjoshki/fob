@@ -288,13 +288,20 @@ static FOB_Operand ast_pointer_to_operand(FOB_IR *ir, const FOB_AST *ast) {
 }
 
 static void push_call(FOB_IR *ir, const FOB_AST *ast) {
+    if (ast->value.call.expected_arguments_data_types.count != ast->value.call.arguments.count) {
+        fob_alert("Mismatching count of arguments and expected types in call to '%s'; have %zu argument%s, have %zu expected type%s\n",
+            ast->value.call.name, ast->value.call.arguments.count, ast->value.call.arguments.count != 1 ? "s" : "\0",
+            ast->value.call.expected_arguments_data_types.count, ast->value.call.expected_arguments_data_types.count != 1 ? "s" : "\0");
+        return;
+    }
+
     size_t int_args = 0;
     size_t float_args = 0;
 
     for (size_t i = 0; i < ast->value.call.arguments.count; i++) {
         const FOB_AST *arg = ast->value.call.arguments.nodes[i];
         const FOB_Data_Type arg_type = fob_get_ast_data_type(arg);
-        const FOB_Data_Type param_type = ast->value.call.expected_arguments_data_types[i];
+        const FOB_Data_Type param_type = ast->value.call.expected_arguments_data_types.types[i];
         bool spilled = false;
 
         if (i > 0 && ast_is_complex_operand(arg)) {
@@ -303,7 +310,7 @@ static void push_call(FOB_IR *ir, const FOB_AST *ast) {
             size_t spilled_floats = 0;
 
             for (size_t j = 0; j < i; j++) {
-                const FOB_Data_Type spill_param_type = ast->value.call.expected_arguments_data_types[j];
+                const FOB_Data_Type spill_param_type = ast->value.call.expected_arguments_data_types.types[j];
                 push_op(ir, FOB_OP_SPILL_ARG, nop, fob_create_fob_operand_argument(j, spilled_ints, spilled_floats, spill_param_type));
 
                 if (fob_data_type_is_float(&spill_param_type))
@@ -322,7 +329,7 @@ static void push_call(FOB_IR *ir, const FOB_AST *ast) {
             size_t spilled_floats = float_args;
 
             for (int j = (int)i - 1; j >= 0; j--) {
-                const FOB_Data_Type spill_param_type = ast->value.call.expected_arguments_data_types[j];
+                const FOB_Data_Type spill_param_type = ast->value.call.expected_arguments_data_types.types[j];
 
                 if (fob_data_type_is_float(&spill_param_type))
                     spilled_floats--;
@@ -488,8 +495,23 @@ static void push_function(FOB_IR *ir, const FOB_AST *ast) {
 
     push_list(ir, &ast->value.function.body, false);
 
-    if (ast->value.function.body.count == 0 || ast->value.function.body.nodes[ast->value.function.body.count - 1]->type != FOB_AST_RETURN)
+    // If the last statement wasn't a return, we need to add one.
+
+    if (ast->value.function.body.count == 0)
         push_op(ir, FOB_OP_RETURN, nop, nop);
+    else {
+        // Backtrack to the last non-nop statement.
+        size_t index = ast->value.function.body.count - 1;
+        FOB_AST *last = ast->value.function.body.nodes[index];
+
+        while (index > 0 && last->type == FOB_AST_NOP) {
+            index--;
+            last = ast->value.function.body.nodes[index];
+        }
+
+        if (last->type != FOB_AST_RETURN)
+            push_op(ir, FOB_OP_RETURN, nop, nop);
+    }
 
     push_op(ir, FOB_OP_FUNC_END, nop, ident);
 }
@@ -626,6 +648,9 @@ static void push_compound_arithmetic(FOB_IR *ir, const FOB_AST *ast) {
     fob_push_ast_node(&new_arithmetic_expr, oper);
     fob_push_ast_node(&new_arithmetic_expr, ast->value.compound_arithmetic.rhs);
 
+    const FOB_Data_Type dt = ast->value.compound_arithmetic.result_type;
+
+    /*
     FOB_Data_Type dt = fob_get_ast_data_type(ast->value.compound_arithmetic.lhs);
 
     if (dt.primitive_type != FOB_PRIM_F64) {
@@ -640,6 +665,7 @@ static void push_compound_arithmetic(FOB_IR *ir, const FOB_AST *ast) {
                 (lhs_dt_is_unsigned && !rhs_dt_is_unsigned))
             dt = rhs_dt;
     }
+            */
 
     FOB_AST *rhs = fob_new_ast_arithmetic(new_arithmetic_expr, dt);
     push_load(ir, t1(dt), ast_to_fob_operand(ir, rhs));

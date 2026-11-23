@@ -32,6 +32,16 @@ typedef struct {
     size_t pointers;
 } FOB_Data_Type;
 
+typedef struct {
+    FOB_Data_Type *types;
+    size_t count;
+    size_t capacity;
+} FOB_Data_Type_List;
+
+FOB_Data_Type_List create_fob_data_type_list();
+void delete_fob_data_type_list(FOB_Data_Type_List *list);
+void fob_push_data_type(FOB_Data_Type_List *list, FOB_Data_Type data_type);
+
 static inline bool fob_primitive_is_float(const FOB_Primitive_Type primitive_type) {
     return primitive_type == FOB_PRIM_F32 || primitive_type == FOB_PRIM_F64;
 }
@@ -46,6 +56,12 @@ static inline bool fob_primitive_is_unsigned(const FOB_Primitive_Type primitive_
 
 static inline bool fob_data_type_is_unsigned(const FOB_Data_Type *data_type) {
     return data_type->pointers == 0 && fob_primitive_is_unsigned(data_type->primitive_type);
+}
+
+// In 99% of cases this will be fine but if we ever decide to support 32 bit or other then this won't work.
+static inline bool fob_data_type_is_64_bit(const FOB_Data_Type *data_type) {
+    return data_type->pointers > 0 || (data_type->primitive_type == FOB_PRIM_I64 || data_type->primitive_type == FOB_PRIM_U64 ||
+        data_type->primitive_type == FOB_PRIM_F64 || data_type->primitive_type == FOB_PRIM_ISIZE || data_type->primitive_type == FOB_PRIM_USIZE);
 }
 
 static inline FOB_Data_Type fob_create_data_type(FOB_Primitive_Type primitive_type) {

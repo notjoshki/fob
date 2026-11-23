@@ -8,6 +8,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define DATA_TYPE_CAPACITY 4
+
+FOB_Data_Type_List create_fob_data_type_list() {
+    return (FOB_Data_Type_List){ .types = malloc(DATA_TYPE_CAPACITY * sizeof(FOB_Data_Type)), .count = 0, .capacity = DATA_TYPE_CAPACITY };
+}
+
+void delete_fob_data_type_list(FOB_Data_Type_List *list) {
+    free(list->types);
+}
+
+void fob_push_data_type(FOB_Data_Type_List *list, FOB_Data_Type data_type) {
+    if (list->count + 1 > list->capacity) {
+        list->capacity *= 2;
+        list->types = realloc(list->types, list->capacity * sizeof(FOB_Data_Type));
+    }
+
+    list->types[list->count++] = data_type;
+}
+
 char *fob_data_type_to_string(const FOB_Data_Type *data_type) {
     char *str = malloc(data_type->pointers + 6);
 

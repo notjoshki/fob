@@ -40,7 +40,8 @@ typedef enum {
     FOB_AST_BREAK,
     FOB_AST_CONTINUE,
     FOB_AST_WHILE,
-    FOB_AST_COMPOUND_ARITHMETIC
+    FOB_AST_COMPOUND_ARITHMETIC,
+    FOB_AST_UNDEFINED_ID
 } FOB_AST_Type;
 
 typedef struct FOB_AST FOB_AST;
@@ -175,7 +176,7 @@ typedef struct {
 typedef struct {
     char *name;
     FOB_AST_List arguments;
-    FOB_Data_Type *expected_arguments_data_types;
+    FOB_Data_Type_List expected_arguments_data_types;
     FOB_Data_Type return_type;
 } FOB_AST_Call;
 
@@ -215,7 +216,12 @@ typedef struct {
     FOB_AST_Operator_Type type;
     FOB_AST *lhs;
     FOB_AST *rhs;
+    FOB_Data_Type result_type;
 } FOB_AST_Compound_Arithmetic;
+
+typedef struct {
+    char *name;
+} FOB_AST_Undefined_ID;
 
 struct FOB_AST {
     size_t uid;
@@ -247,6 +253,7 @@ struct FOB_AST {
         FOB_AST_For for_;
         FOB_AST_While while_;
         FOB_AST_Compound_Arithmetic compound_arithmetic;
+        FOB_AST_Undefined_ID undefined_id;
     } value;
 };
 
@@ -269,7 +276,7 @@ FOB_AST *fob_new_ast_unary_not(FOB_AST *value, const bool as_boolean);
 FOB_AST *fob_new_ast_unary_negate(FOB_AST *value);
 FOB_AST *fob_new_ast_inline_assembly(char *code);
 FOB_AST *fob_new_ast_pointer(FOB_AST *value);
-FOB_AST *fob_new_ast_call(char *name, FOB_AST_List arguments, FOB_Data_Type *expected_arguments_data_types, FOB_Data_Type return_type);
+FOB_AST *fob_new_ast_call(char *name, FOB_AST_List arguments, FOB_Data_Type_List expected_arguments_data_types, FOB_Data_Type return_type);
 FOB_AST *fob_new_ast_dereference(FOB_AST *value);
 FOB_AST *fob_new_ast_index(FOB_AST *pointer, FOB_AST *offset);
 FOB_AST *fob_new_ast_pre_operation(FOB_AST_Operator_Type type, FOB_AST *value);
@@ -278,7 +285,8 @@ FOB_AST *fob_new_ast_for(FOB_AST *statement, FOB_AST *condition, FOB_AST *repeat
 FOB_AST *fob_new_ast_break();
 FOB_AST *fob_new_ast_continue();
 FOB_AST *fob_new_ast_while(FOB_AST *condition, FOB_AST_List body, bool do_body_first);
-FOB_AST *fob_new_ast_compound_arithmetic(FOB_AST_Operator_Type type, FOB_AST *lhs, FOB_AST *rhs);
+FOB_AST *fob_new_ast_compound_arithmetic(FOB_AST_Operator_Type type, FOB_AST *lhs, FOB_AST *rhs, FOB_Data_Type result_type);
+FOB_AST *fob_new_ast_undefined_id(char *name);
 
 void fob_delete_ast(FOB_AST *ast);
 char *fob_ast_type_to_string(const FOB_AST_Type type);

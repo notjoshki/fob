@@ -174,7 +174,7 @@ FOB_AST *fob_new_ast_pointer(FOB_AST *value) {
     return ast;
 }
 
-FOB_AST *fob_new_ast_call(char *name, FOB_AST_List arguments, FOB_Data_Type *expected_arguments_data_types, FOB_Data_Type return_type) {
+FOB_AST *fob_new_ast_call(char *name, FOB_AST_List arguments, FOB_Data_Type_List expected_arguments_data_types, FOB_Data_Type return_type) {
     FOB_AST *ast = new_ast();
     ast->type = FOB_AST_CALL;
     ast->value.call.name = name;
@@ -246,12 +246,20 @@ FOB_AST *fob_new_ast_while(FOB_AST *condition, FOB_AST_List body, bool do_body_f
     return ast;
 }
 
-FOB_AST *fob_new_ast_compound_arithmetic(FOB_AST_Operator_Type type, FOB_AST *lhs, FOB_AST *rhs) {
+FOB_AST *fob_new_ast_compound_arithmetic(FOB_AST_Operator_Type type, FOB_AST *lhs, FOB_AST *rhs, FOB_Data_Type result_type) {
     FOB_AST *ast = new_ast();
     ast->type = FOB_AST_COMPOUND_ARITHMETIC;
     ast->value.compound_arithmetic.type = type;
     ast->value.compound_arithmetic.lhs = lhs;
     ast->value.compound_arithmetic.rhs = rhs;
+    ast->value.compound_arithmetic.result_type = result_type;
+    return ast;
+}
+
+FOB_AST *fob_new_ast_undefined_id(char *name) {
+    FOB_AST *ast = new_ast();
+    ast->type = FOB_AST_UNDEFINED_ID;
+    ast->value.undefined_id.name = name;
     return ast;
 }
 
@@ -321,7 +329,7 @@ void fob_delete_ast(FOB_AST *ast) {
             break;
         case FOB_AST_CALL:
             free(ast->value.call.name);
-            free(ast->value.call.expected_arguments_data_types);
+            delete_fob_data_type_list(&ast->value.call.expected_arguments_data_types);
             fob_delete_ast_list(&ast->value.call.arguments, true);
             break;
         case FOB_AST_DEREFERENCE:
@@ -356,6 +364,9 @@ void fob_delete_ast(FOB_AST *ast) {
         case FOB_AST_COMPOUND_ARITHMETIC:
             fob_delete_ast(ast->value.compound_arithmetic.lhs);
             fob_delete_ast(ast->value.compound_arithmetic.rhs);
+            break;
+        case FOB_AST_UNDEFINED_ID:
+            free(ast->value.undefined_id.name);
             break;
         default:
             fob_alert("Uncaught AST type %u (%p)\n", ast->type, (void *)ast);
@@ -395,6 +406,7 @@ char *fob_ast_type_to_string(const FOB_AST_Type type) {
         case FOB_AST_CONTINUE: return "continue";
         case FOB_AST_WHILE: return "while";
         case FOB_AST_COMPOUND_ARITHMETIC: return "compound arithmetic";
+        case FOB_AST_UNDEFINED_ID: return "undefined id";
         default: break;
     }
 

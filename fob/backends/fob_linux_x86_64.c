@@ -246,13 +246,15 @@ static char *raw_float_to_string(const FOB_Operand *operand) {
     char *data = malloc(32);
 
     if (float_->primitive_type == FOB_PRIM_F32) {
-        uint32_t bits;
-        memcpy(&bits, &float_->float_const.f32, 4);
-        sprintf(data, "%" PRIu32, bits);
+        //uint32_t bits;
+        //memcpy(&bits, &float_->float_const.f32, 4);
+        //sprintf(data, "%" PRIu32, bits);
+        sprintf(data, "%f", float_->float_const.f32);
     } else if (float_->primitive_type == FOB_PRIM_F64) {
-        uint64_t bits;
-        memcpy(&bits, &float_->float_const.f64, 8);
-        sprintf(data, "%" PRIu64, bits);
+        //uint64_t bits;
+        //memcpy(&bits, &float_->float_const.f64, 8);
+        //sprintf(data, "%" PRIu64, bits);
+        sprintf(data, "%lf", float_->float_const.f64);
     } else {
         fob_alert("Uncaught float const primitive type %u\n", float_->primitive_type);
         data[0] = '\0';
@@ -321,9 +323,13 @@ static size_t ir_register_to_hardware_register_number(const size_t number, const
     return 0;
 }
 
-static char *fob_operand_register_to_string(const FOB_Operand *operand, const bool is_hardware_register) {
+static char *fob_operand_register_to_string(const FOB_Operand *operand, bool is_hardware_register) {
     const FOB_Operand_Register *reg = &operand->value.register_;
-    const bool is_float = fob_data_type_is_float(&operand->data_type);
+
+    if (reg->is_hardware)
+        is_hardware_register = true;
+
+    const bool is_float = fob_primitive_is_float(operand->value.register_.primitive_type);
     size_t num = is_hardware_register ? reg->number : ir_register_to_hardware_register_number(reg->number, is_float);
     char *str = malloc(24);
 
@@ -587,7 +593,14 @@ static char *emit_return(const FOB_Op *op, FOB_Backend *backend) {
         return code;
     }
 
-    code = fob_operand_is_constant(&op->source) ? emit_load_const(op, backend) : emit_load_memory(op, backend);
+    assert(op->destination.type == FOB_OPER_REGISTER);
+
+    // Make sure return register is hardware. E.g. float register 0 is xmm6, but we want xmm0.
+    FOB_Operand hardware_dst = (FOB_Operand){ .type = FOB_OPER_REGISTER, .data_type = op->destination.data_type,
+        .value.register_ = (FOB_Operand_Register){ .is_hardware = true, .number = 0, .primitive_type = op->destination.value.register_.primitive_type }};
+
+    const FOB_Op hardware_op = (FOB_Op){ .destination = hardware_dst, .source = op->source };
+    code = fob_operand_is_constant(&op->source) ? emit_load_const(&hardware_op, backend) : emit_load_memory(&hardware_op, backend);
     code = realloc(code, strlen(code) + 13);
     strcat(code, backend->stack_bytes_allocated > 0 ? "leave\nret\n" : "pop rbp\nret\n");
     return code;
@@ -1046,6 +1059,15 @@ static char *emit_store_memory(const FOB_Op *op, FOB_Backend *backend) {
             code = malloc(strlen(dst_str) + strlen(src_str) + 17);
             sprintf(code, "cvtss2sd %s, %s\n", dst_str, src_str);
         } else if (!fob_primitive_is_float(src_prim)) {
+            if (primitive_type_to_word_size(src_prim) <= FOB_WORD_WORD) {
+                assert(src->type == FOB_OPER_REGISTER);
+                // TODO: Will using the upper bits of this lower bit register cause problems?
+                FOB_Operand src_reg = fob_create_fob_operand_register(fob_create_data_type(fob_primitive_is_unsigned(src_prim) ? FOB_PRIM_U32 : FOB_PRIM_I32), src->value.register_.number);
+                free(src_str);
+                src_str = fob_operand_register_to_string(&src_reg, false);
+            }
+
+
             code = malloc(strlen(dst_str) + strlen(src_str) + 18);
             sprintf(code, "cvtsi2s%c %s, %s\n", float_word_char(dst_prim), dst_str, src_str);
         } else {
@@ -1054,8 +1076,23 @@ static char *emit_store_memory(const FOB_Op *op, FOB_Backend *backend) {
         }
     } else {
         if (fob_primitive_is_float(src_prim)) {
-            code = malloc(strlen(dst_str) + strlen(src_str) + 14);
-            sprintf(code, "cvtts%c2si %s, %s\n", float_word_char(src_prim), dst_str, src_str);
+            if (primitive_type_to_word_size(dst_prim) <= FOB_WORD_WORD) {
+                FOB_Operand temp_reg_32 = get_temporary_register(FOB_PRIM_I32);
+                char *reg_str_32 = fob_operand_register_to_string(&temp_reg_32, true);
+
+                FOB_Operand temp_reg_dst_prim = get_temporary_register(dst_prim);
+                char *reg_str_dst_prim = fob_operand_register_to_string(&temp_reg_dst_prim, true);
+
+                code = malloc(strlen(dst_str) + strlen(src_str) + strlen(reg_str_32) + strlen(reg_str_dst_prim) + 31);
+                sprintf(code, "cvtts%c2si %s, %s\n"
+                              "mov %s, %s\n", float_word_char(src_prim), reg_str_32, src_str, dst_str, reg_str_dst_prim);
+
+                free(reg_str_32);
+                free(reg_str_dst_prim);
+            } else {
+                code = malloc(strlen(dst_str) + strlen(src_str) + 14);
+                sprintf(code, "cvtts%c2si %s, %s\n", float_word_char(src_prim), dst_str, src_str);
+            }
         } else {
             code = malloc(strlen(dst_str) + strlen(src_str) + 12);
             sprintf(code, "mov %s, %s\n", dst_str, src_str);
@@ -1223,7 +1260,7 @@ static char *emit_arithmetic(const FOB_Op *op, FOB_Backend *backend) {
 
                 code = malloc(strlen(dst_str) + strlen(load_str) + 24);
                 sprintf(code, "test %s, %s\n"
-                              "setnz %s\n%s", dst_str, dst_str, dst_8bit_str, load_str);
+                              "setz %s\n%s", dst_str, dst_str, dst_8bit_str, load_str);
 
                 free(load_str);
                 free(dst_8bit_str);
